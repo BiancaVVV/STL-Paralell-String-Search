@@ -1,0 +1,62 @@
+#include <iostream>
+#include <string>
+#include <thread>
+#include <vector>
+#include <mutex>
+#include <atomic>
+
+using namespace std;
+
+atomic<bool> found(false);
+mutex mtx;
+
+bool findString(const string& haystack, const string& needle) {
+    for (size_t i = 0; i < haystack.size() - needle.size() + 1; i++) {
+        if (haystack.substr(i, needle.size()) == needle) {
+            lock_guard<mutex> lock(mtx);
+            found = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+void searchInRange(const string& haystack, const string& needle, size_t start, size_t end) {
+    for (size_t i = start; i < end; i++) {
+        if (findString(haystack, needle)) {
+            return;
+        }
+    }
+}
+
+int main() {
+    string haystack = "Acesta este un text de exemplu pentru a căuta un string într-un alt string.";
+    string needle = "Acesta nu este";
+
+    size_t numThreads = thread::hardware_concurrency();
+    if (numThreads == 0) {
+        numThreads = 4; // Default to 4 threads if hardware_concurrency() returns 0
+    }
+
+    size_t chunkSize = haystack.size() / numThreads;
+    vector<thread> threads(numThreads);
+
+    for (size_t i = 0; i < numThreads; i++) {
+        size_t start = i * chunkSize;
+        size_t end = (i == numThreads - 1) ? haystack.size() : (i + 1) * chunkSize;
+        threads[i] = thread(searchInRange, ref(haystack), ref(needle), start, end);
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    if (found) {
+        cout << "Șirul căutat a fost găsit în textul dat." << endl;
+    }
+    else {
+        cout << "Șirul căutat nu a fost găsit în textul dat." << endl;
+    }
+
+    return 0;
+}
